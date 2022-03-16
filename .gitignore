@@ -1,0 +1,3 @@
+*.so
+vulkan-tutorial
+perf*
