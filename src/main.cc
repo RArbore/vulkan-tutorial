@@ -16,6 +16,10 @@ const std::vector<const char*> validation_layers = {
     "VK_LAYER_KHRONOS_validation",
 };
 
+const std::vector<const char*> device_extensions = {
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+};
+
 #ifdef NDEBUG
 static constexpr bool enable_debug = false;
 #else
@@ -79,14 +83,25 @@ int main() {
     if (!physical_device_count) throw std::runtime_error("Vulkan failure");
     std::vector<VkPhysicalDevice> physical_devices(physical_device_count);
     vkEnumeratePhysicalDevices(instance, &physical_device_count, physical_devices.data());
-    for (const auto& device: physical_devices) {
+    for (const auto& device : physical_devices) {
 	if ([](VkPhysicalDevice check_device) {
 	    VkPhysicalDeviceProperties device_properties;
 	    vkGetPhysicalDeviceProperties(check_device, &device_properties);
 	    VkPhysicalDeviceFeatures device_features;
 	    vkGetPhysicalDeviceFeatures(check_device, &device_features);
 	    if (enable_debug) std::cout << device_properties.deviceName << std::endl;
-	    return true;
+
+	    uint32_t extension_count;
+	    vkEnumerateDeviceExtensionProperties(check_device, nullptr, &extension_count, nullptr);
+	    std::vector<VkExtensionProperties> available_extensions(extension_count);
+	    vkEnumerateDeviceExtensionProperties(check_device, nullptr, &extension_count, available_extensions.data());
+
+	    std::set<std::string> required_extensions(device_extensions.begin(), device_extensions.end());
+	    for (const auto& extension : available_extensions) {
+		required_extensions.erase(extension.extensionName);
+	    }
+	    
+	    return required_extensions.empty();
 	}(device)) {
 	    physical_device = device;
 	    break;
