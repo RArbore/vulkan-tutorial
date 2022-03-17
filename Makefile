@@ -7,17 +7,28 @@ CXX_FLAGS=-std=c++20 -O3 -flto -fno-signed-zeros -fno-trapping-math -frename-reg
 
 L_FLAGS=-L/usr/lib/x86_64-linux-gnu -lglfw -lvulkan -fopenmp -flto
 
-vulkan-tutorial: build/main.o
+RELEASE=-DNDEBUG
+
+build/debug/vulkan-tutorial: build/debug/main.o
 	$(LD) -o $@ $^ $(L_FLAGS)
-build/main.o: src/main.cc
+build/debug/main.o: src/main.cc
 	$(CXX) $(CXX_FLAGS) -c -o $@ $<
 
-exe: vulkan-tutorial
+build/release/vulkan-tutorial: build/release/main.o
+	$(LD) -o $@ $^ $(L_FLAGS)
+build/release/main.o: src/main.cc
+	$(CXX) $(CXX_FLAGS) $(RELEASE) -c -o $@ $<
+
+debug: build/debug/vulkan-tutorial
+	__GL_SYNC_TO_VBLANK=0 ./$<
+release: build/release/vulkan-tutorial
 	__GL_SYNC_TO_VBLANK=0 ./$<
 
 clean:
-	rm -rf build/*.o
-	rm -rf vulkan-tutorial
+	rm -rf build/debug/*.o
+	rm -rf build/release/*.o
+	rm -rf build/debug/vulkan-tutorial
+	rm -rf build/release/vulkan-tutorial
 
 .DEFAULT: vulkan-tutorial
 .PHONY: exe clean

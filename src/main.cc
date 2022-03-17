@@ -29,26 +29,6 @@ int main() {
 
     auto window = glfwCreateWindow(800, 600, "vulkan-tutorial", nullptr, nullptr);
 
-    if (enable_validation_layers) {
-	uint32_t validation_layer_count = 0;
-	vkEnumerateInstanceLayerProperties(&validation_layer_count, nullptr);
-	VkLayerProperties *available_validation_layers = new VkLayerProperties[validation_layer_count];
-	vkEnumerateInstanceLayerProperties(&validation_layer_count, available_validation_layers);
-	for (const char* layer_name : validation_layers) {
-	    std::size_t i = 0;
-	    for (; i < validation_layer_count; ++i) {
-		auto layer_props = available_validation_layers[i];
-		if (!strcmp(layer_name, layer_props.layerName)) {
-		    break;
-		}
-	    }
-
-	    if (i >= validation_layer_count) {
-		VK_ASSERT(VK_ERROR_VALIDATION_FAILED_EXT)
-	    }
-	}
-    }
-
     VkApplicationInfo app_info;
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app_info.pApplicationName = "vulkan-tutorial";
@@ -65,6 +45,29 @@ int main() {
     create_info.enabledExtensionCount = glfw_ext_count;
     create_info.ppEnabledExtensionNames = glfw_exts;
     create_info.enabledLayerCount = 0;
+
+    if (enable_validation_layers) {
+	uint32_t validation_layer_count = 0;
+	vkEnumerateInstanceLayerProperties(&validation_layer_count, nullptr);
+	VkLayerProperties *available_validation_layers = new VkLayerProperties[validation_layer_count];
+	vkEnumerateInstanceLayerProperties(&validation_layer_count, available_validation_layers);
+	for (const char* layer_name : validation_layers) {
+	    std::size_t i = 0;
+	    for (; i < validation_layer_count; ++i) {
+		auto layer_props = available_validation_layers[i];
+		if (!strcmp(layer_name, layer_props.layerName)) {
+		    break;
+		}
+	    }
+	    if (i >= validation_layer_count) {
+		VK_ASSERT(VK_ERROR_VALIDATION_FAILED_EXT)
+	    }
+	}
+
+	create_info.enabledLayerCount = validation_layer_count;
+	create_info.ppEnabledLayerNames = validation_layers.data();
+	delete[] available_validation_layers;
+    }
 
     VkInstance instance;
     VK_ASSERT(vkCreateInstance(&create_info, nullptr, &instance));
