@@ -16,9 +16,9 @@ const std::vector<const char*> validation_layers = {
 };
 
 #ifdef NDEBUG
-const bool enable_validation_layers = false;
+static constexpr bool enable_debug = false;
 #else
-const bool enable_validation_layers = true;
+static constexpr bool enable_debug = true;
 #endif
 
 int main() {
@@ -29,7 +29,7 @@ int main() {
 
     auto window = glfwCreateWindow(800, 600, "vulkan-tutorial", nullptr, nullptr);
 
-    VkApplicationInfo app_info;
+    VkApplicationInfo app_info {};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app_info.pApplicationName = "vulkan-tutorial";
     app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -39,18 +39,18 @@ int main() {
 
     uint32_t glfw_ext_count = 0;
     const char** glfw_exts = glfwGetRequiredInstanceExtensions(&glfw_ext_count);
-    VkInstanceCreateInfo create_info;
+    VkInstanceCreateInfo create_info {};
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     create_info.pApplicationInfo = &app_info;
     create_info.enabledExtensionCount = glfw_ext_count;
     create_info.ppEnabledExtensionNames = glfw_exts;
     create_info.enabledLayerCount = 0;
 
-    if (enable_validation_layers) {
+    if (enable_debug) {
 	uint32_t validation_layer_count = 0;
 	vkEnumerateInstanceLayerProperties(&validation_layer_count, nullptr);
-	VkLayerProperties *available_validation_layers = new VkLayerProperties[validation_layer_count];
-	vkEnumerateInstanceLayerProperties(&validation_layer_count, available_validation_layers);
+	std::vector<VkLayerProperties> available_validation_layers(validation_layer_count);
+	vkEnumerateInstanceLayerProperties(&validation_layer_count, available_validation_layers.data());
 	for (const char* layer_name : validation_layers) {
 	    std::size_t i = 0;
 	    for (; i < validation_layer_count; ++i) {
@@ -59,18 +59,36 @@ int main() {
 		    break;
 		}
 	    }
-	    if (i >= validation_layer_count) {
-		VK_ASSERT(VK_ERROR_VALIDATION_FAILED_EXT)
-	    }
+	    if (i >= validation_layer_count) throw std::runtime_error("Vulkan failure");
 	}
 
 	create_info.enabledLayerCount = validation_layer_count;
 	create_info.ppEnabledLayerNames = validation_layers.data();
-	delete[] available_validation_layers;
     }
 
     VkInstance instance;
     VK_ASSERT(vkCreateInstance(&create_info, nullptr, &instance));
+
+    VkPhysicalDevice physical_device = VK_NULL_HANDLE;
+    uint32_t physical_device_count = 0;
+    vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
+    if (!physical_device_count) throw std::runtime_error("Vulkan failure");
+    std::vector<VkPhysicalDevice> physical_devices(physical_device_count);
+    vkEnumeratePhysicalDevices(instance, &physical_device_count, physical_devices.data());
+    for (const auto& device: physical_devices) {
+	if ([](VkPhysicalDevice check_device) {
+	    VkPhysicalDeviceProperties device_properties;
+	    vkGetPhysicalDeviceProperties(check_device, &device_properties);
+	    VkPhysicalDeviceFeatures device_features;
+	    vkGetPhysicalDeviceFeatures(check_device, &device_features);
+	    if (enable_debug) std::cout << device_properties.deviceName << std::endl;
+	    return true;
+	}(device)) {
+	    physical_device = device;
+	    break;
+	}
+    }
+    if (physical_device == VK_NULL_HANDLE) throw std::runtime_error("Vulkan failure");
 
     while (!glfwWindowShouldClose(window)) {
 	glfwPollEvents();
