@@ -142,6 +142,8 @@ int main() {
     device_create_info.pQueueCreateInfos = queue_create_infos.data();
     device_create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
     device_create_info.pEnabledFeatures = &device_features;
+    device_create_info.enabledExtensionCount = static_cast<uint32_t>(device_extensions.size());
+    device_create_info.ppEnabledExtensionNames = device_extensions.data();
 
     VkDevice device;
     VK_ASSERT(vkCreateDevice(physical_device, &device_create_info, nullptr, &device));
@@ -150,10 +152,70 @@ int main() {
     vkGetDeviceQueue(device, graphics_family_index, 0, &graphics_queue);
     vkGetDeviceQueue(device, present_family_index, 0, &present_queue);
 
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &surface_capabilities);
+    VkExtent2D swap_extent = surface_capabilities.currentExtent;
+
+    uint32_t format_count = 0;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &format_count, nullptr);
+    std::vector<VkSurfaceFormatKHR> formats(format_count);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &format_count, formats.data());
+    VkSurfaceFormatKHR surface_format = formats.at(0);
+    for (const auto& available_format : formats) {
+	if (available_format.format == VK_FORMAT_B8G8R8A8_SRGB && available_format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+	    surface_format = available_format;
+	    break;
+	}
+    }
+
+    uint32_t present_mode_count = 0;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &present_mode_count, nullptr);
+    std::vector<VkPresentModeKHR> present_modes(present_mode_count);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &present_mode_count, present_modes.data());
+    VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
+    for (const auto& available_present_mode : present_modes) {
+	if (available_present_mode == VK_PRESENT_MODE_MAILBOX_KHR) {
+	    present_mode = available_present_mode;
+	    break;
+	}
+    }
+
+    uint32_t image_count = surface_capabilities.minImageCount + 1;
+    if (surface_capabilities.maxImageCount > 0 && image_count > surface_capabilities.maxImageCount) image_count = surface_capabilities.maxImageCount;
+    VkSwapchainCreateInfoKHR swapchain_create_info{};
+    swapchain_create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    swapchain_create_info.surface = surface;
+    swapchain_create_info.minImageCount = image_count;
+    swapchain_create_info.imageFormat = surface_format.format;
+    swapchain_create_info.imageColorSpace = surface_format.colorSpace;
+    swapchain_create_info.imageExtent = swap_extent;
+    swapchain_create_info.imageArrayLayers = 1;
+    swapchain_create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    uint32_t queue_family_indices[] = {graphics_family_index, present_family_index};
+    if (graphics_family_index != present_family_index) {
+	swapchain_create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+	swapchain_create_info.queueFamilyIndexCount = 2;
+	swapchain_create_info.pQueueFamilyIndices = queue_family_indices;
+    }
+    else {
+	swapchain_create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	swapchain_create_info.queueFamilyIndexCount = 0;
+	swapchain_create_info.pQueueFamilyIndices = nullptr;
+    }
+    swapchain_create_info.preTransform = surface_capabilities.currentTransform;
+    swapchain_create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    swapchain_create_info.presentMode = present_mode;
+    swapchain_create_info.clipped = VK_TRUE;
+    swapchain_create_info.oldSwapchain = VK_NULL_HANDLE;
+
+    VkSwapchainKHR swap_chain;
+    VK_ASSERT(vkCreateSwapchainKHR(device, &swapchain_create_info, nullptr, &swap_chain));
+
     while (!glfwWindowShouldClose(window)) {
 	glfwPollEvents();
     }
 
+    vkDestroySwapchainKHR(device, swap_chain, nullptr);
     vkDestroyDevice(device, nullptr);
     vkDestroySurfaceKHR(instance, surface, nullptr);
     vkDestroyInstance(instance, nullptr);
