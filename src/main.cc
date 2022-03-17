@@ -128,7 +128,7 @@ int main() {
     std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
     float queue_priority = 1.0f;
     for (auto family : unique_queue_families) {
-	VkDeviceQueueCreateInfo queue_create_info{};
+	VkDeviceQueueCreateInfo queue_create_info {};
 	queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 	queue_create_info.queueFamilyIndex = family;
 	queue_create_info.queueCount = 1;
@@ -136,8 +136,8 @@ int main() {
 	queue_create_infos.push_back(queue_create_info);
     }
 
-    VkPhysicalDeviceFeatures device_features{};
-    VkDeviceCreateInfo device_create_info{};
+    VkPhysicalDeviceFeatures device_features {};
+    VkDeviceCreateInfo device_create_info {};
     device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     device_create_info.pQueueCreateInfos = queue_create_infos.data();
     device_create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
@@ -182,7 +182,7 @@ int main() {
 
     uint32_t image_count = surface_capabilities.minImageCount + 1;
     if (surface_capabilities.maxImageCount > 0 && image_count > surface_capabilities.maxImageCount) image_count = surface_capabilities.maxImageCount;
-    VkSwapchainCreateInfoKHR swapchain_create_info{};
+    VkSwapchainCreateInfoKHR swapchain_create_info {};
     swapchain_create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     swapchain_create_info.surface = surface;
     swapchain_create_info.minImageCount = image_count;
@@ -211,10 +211,37 @@ int main() {
     VkSwapchainKHR swap_chain;
     VK_ASSERT(vkCreateSwapchainKHR(device, &swapchain_create_info, nullptr, &swap_chain));
 
+    vkGetSwapchainImagesKHR(device, swap_chain, &image_count, nullptr);
+    std::vector<VkImage> swap_chain_images(image_count);
+    vkGetSwapchainImagesKHR(device, swap_chain, &image_count, swap_chain_images.data());
+
+    std::vector<VkImageView> swap_chain_image_views;
+    for (const auto& swap_chain_image : swap_chain_images) {
+	VkImageViewCreateInfo image_view_create_info {};
+	image_view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	image_view_create_info.image = swap_chain_image;
+	image_view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	image_view_create_info.format = surface_format.format;
+	image_view_create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+	image_view_create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+	image_view_create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+	image_view_create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+	image_view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	image_view_create_info.subresourceRange.baseMipLevel = 0;
+	image_view_create_info.subresourceRange.levelCount = 1;
+	image_view_create_info.subresourceRange.baseArrayLayer = 0;
+	image_view_create_info.subresourceRange.layerCount = 1;
+	swap_chain_image_views.emplace_back();
+	VK_ASSERT(vkCreateImageView(device, &image_view_create_info, nullptr, &swap_chain_image_views.back()));
+    }
+    
     while (!glfwWindowShouldClose(window)) {
 	glfwPollEvents();
     }
 
+    for (auto swap_chain_image_view : swap_chain_image_views) {
+	vkDestroyImageView(device, swap_chain_image_view, nullptr);
+    }
     vkDestroySwapchainKHR(device, swap_chain, nullptr);
     vkDestroyDevice(device, nullptr);
     vkDestroySurfaceKHR(instance, surface, nullptr);
