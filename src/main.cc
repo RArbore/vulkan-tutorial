@@ -90,6 +90,17 @@ int main() {
     }
     if (physical_device == VK_NULL_HANDLE) throw std::runtime_error("Vulkan failure");
 
+    uint32_t queue_family_count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, nullptr);
+    std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, queue_families.data());
+    uint32_t graphics_queue = 0;
+    for (; graphics_queue < queue_families.size(); ++graphics_queue) {
+	const auto& queue_family = queue_families[graphics_queue];
+	if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) break;
+    }
+    if (graphics_queue >= queue_families.size()) throw std::runtime_error("Vulkan failure");
+
     while (!glfwWindowShouldClose(window)) {
 	glfwPollEvents();
     }
