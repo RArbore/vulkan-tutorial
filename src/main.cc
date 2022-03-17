@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cstring>
 #include <vector>
+#include <set>
 
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
@@ -67,7 +68,10 @@ int main() {
     }
 
     VkInstance instance;
-    VK_ASSERT(vkCreateInstance(&instance_create_info, nullptr, &instance))
+    VK_ASSERT(vkCreateInstance(&instance_create_info, nullptr, &instance));
+
+    VkSurfaceKHR surface;
+    VK_ASSERT(glfwCreateWindowSurface(instance, window, nullptr, &surface));
 
     VkPhysicalDevice physical_device = VK_NULL_HANDLE;
     uint32_t physical_device_count = 0;
@@ -94,34 +98,49 @@ int main() {
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, nullptr);
     std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, queue_families.data());
-    uint32_t graphics_queue = 0;
-    for (; graphics_queue < queue_families.size(); ++graphics_queue) {
-	const auto& queue_family = queue_families[graphics_queue];
+    uint32_t graphics_family_index = 0, present_family_index = static_cast<uint32_t>(queue_families.size());
+    for (; graphics_family_index < queue_families.size(); ++graphics_family_index) {
+	VkBool32 present_support = false;
+	vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, graphics_family_index, surface, &present_support);
+	if (present_support) present_family_index = graphics_family_index;
+	const auto& queue_family = queue_families[graphics_family_index];
 	if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) break;
     }
-    if (graphics_queue >= queue_families.size()) throw std::runtime_error("Vulkan failure");
+    if (graphics_family_index >= queue_families.size()) throw std::runtime_error("Vulkan failure");
+    if (present_family_index >= queue_families.size()) throw std::runtime_error("Vulkan failure");
+    std::set<uint32_t> unique_queue_families = {graphics_family_index, present_family_index};
 
-    VkDeviceQueueCreateInfo queue_create_info{};
-    queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queue_create_info.queueFamilyIndex = graphics_queue;
-    queue_create_info.queueCount = 1;
+    std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
     float queue_priority = 1.0f;
-    queue_create_info.pQueuePriorities = &queue_priority;
+    for (auto family : unique_queue_families) {
+	VkDeviceQueueCreateInfo queue_create_info{};
+	queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	queue_create_info.queueFamilyIndex = family;
+	queue_create_info.queueCount = 1;
+	queue_create_info.pQueuePriorities = &queue_priority;
+	queue_create_infos.push_back(queue_create_info);
+    }
+
     VkPhysicalDeviceFeatures device_features{};
     VkDeviceCreateInfo device_create_info{};
     device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    device_create_info.pQueueCreateInfos = &queue_create_info;
-    device_create_info.queueCreateInfoCount = 1;
+    device_create_info.pQueueCreateInfos = queue_create_infos.data();
+    device_create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
     device_create_info.pEnabledFeatures = &device_features;
 
-    VkDevice logical_device;
-    VK_ASSERT(vkCreateDevice(physical_device, &device_create_info, nullptr, &logical_device))
+    VkDevice device;
+    VK_ASSERT(vkCreateDevice(physical_device, &device_create_info, nullptr, &device));
+
+    VkQueue graphics_queue, present_queue;
+    vkGetDeviceQueue(device, graphics_family_index, 0, &graphics_queue);
+    vkGetDeviceQueue(device, present_family_index, 0, &present_queue);
 
     while (!glfwWindowShouldClose(window)) {
 	glfwPollEvents();
     }
 
-    vkDestroyDevice(logical_device, nullptr);
+    vkDestroyDevice(device, nullptr);
+    vkDestroySurfaceKHR(instance, surface, nullptr);
     vkDestroyInstance(instance, nullptr);
 
     glfwDestroyWindow(window);
