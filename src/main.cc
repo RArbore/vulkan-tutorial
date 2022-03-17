@@ -39,12 +39,12 @@ int main() {
 
     uint32_t glfw_ext_count = 0;
     const char** glfw_exts = glfwGetRequiredInstanceExtensions(&glfw_ext_count);
-    VkInstanceCreateInfo create_info {};
-    create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    create_info.pApplicationInfo = &app_info;
-    create_info.enabledExtensionCount = glfw_ext_count;
-    create_info.ppEnabledExtensionNames = glfw_exts;
-    create_info.enabledLayerCount = 0;
+    VkInstanceCreateInfo instance_create_info {};
+    instance_create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    instance_create_info.pApplicationInfo = &app_info;
+    instance_create_info.enabledExtensionCount = glfw_ext_count;
+    instance_create_info.ppEnabledExtensionNames = glfw_exts;
+    instance_create_info.enabledLayerCount = 0;
 
     if (enable_debug) {
 	uint32_t validation_layer_count = 0;
@@ -62,12 +62,12 @@ int main() {
 	    if (i >= validation_layer_count) throw std::runtime_error("Vulkan failure");
 	}
 
-	create_info.enabledLayerCount = validation_layer_count;
-	create_info.ppEnabledLayerNames = validation_layers.data();
+	instance_create_info.enabledLayerCount = validation_layer_count;
+	instance_create_info.ppEnabledLayerNames = validation_layers.data();
     }
 
     VkInstance instance;
-    VK_ASSERT(vkCreateInstance(&create_info, nullptr, &instance));
+    VK_ASSERT(vkCreateInstance(&instance_create_info, nullptr, &instance))
 
     VkPhysicalDevice physical_device = VK_NULL_HANDLE;
     uint32_t physical_device_count = 0;
@@ -101,10 +101,27 @@ int main() {
     }
     if (graphics_queue >= queue_families.size()) throw std::runtime_error("Vulkan failure");
 
+    VkDeviceQueueCreateInfo queue_create_info{};
+    queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queue_create_info.queueFamilyIndex = graphics_queue;
+    queue_create_info.queueCount = 1;
+    float queue_priority = 1.0f;
+    queue_create_info.pQueuePriorities = &queue_priority;
+    VkPhysicalDeviceFeatures device_features{};
+    VkDeviceCreateInfo device_create_info{};
+    device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    device_create_info.pQueueCreateInfos = &queue_create_info;
+    device_create_info.queueCreateInfoCount = 1;
+    device_create_info.pEnabledFeatures = &device_features;
+
+    VkDevice logical_device;
+    VK_ASSERT(vkCreateDevice(physical_device, &device_create_info, nullptr, &logical_device))
+
     while (!glfwWindowShouldClose(window)) {
 	glfwPollEvents();
     }
 
+    vkDestroyDevice(logical_device, nullptr);
     vkDestroyInstance(instance, nullptr);
 
     glfwDestroyWindow(window);
