@@ -243,12 +243,26 @@ int main() {
 
     std::size_t vert_size = static_cast<std::size_t>(&_binary_build_shaders_vert_spv_end - &_binary_build_shaders_vert_spv_start);
     std::size_t frag_size = static_cast<std::size_t>(&_binary_build_shaders_frag_spv_end - &_binary_build_shaders_frag_spv_start);
-    char *vert_spv = new char[vert_size + 1];
-    char *frag_spv = new char[frag_size + 1];
-    memcpy(vert_spv, &_binary_build_shaders_vert_spv_start, vert_size);
-    memcpy(frag_spv, &_binary_build_shaders_frag_spv_start, frag_size);
-    vert_spv[vert_size] = '\0';
-    frag_spv[frag_size] = '\0';
+    std::vector<char> vert_spv(vert_size);
+    std::vector<char> frag_spv(frag_size);
+    memcpy(vert_spv.data(), &_binary_build_shaders_vert_spv_start, vert_size);
+    memcpy(frag_spv.data(), &_binary_build_shaders_frag_spv_start, frag_size);
+
+    VkShaderModuleCreateInfo vert_shader_module_create_info {};
+    vert_shader_module_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    vert_shader_module_create_info.codeSize = vert_size;
+    vert_shader_module_create_info.pCode = reinterpret_cast<const uint32_t*>(vert_spv.data());
+
+    VkShaderModule vert_shader_module;
+    VK_ASSERT(vkCreateShaderModule(device, &vert_shader_module_create_info, nullptr, &vert_shader_module));
+    
+    VkShaderModuleCreateInfo frag_shader_module_create_info {};
+    frag_shader_module_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    frag_shader_module_create_info.codeSize = frag_size;
+    frag_shader_module_create_info.pCode = reinterpret_cast<const uint32_t*>(frag_spv.data());
+
+    VkShaderModule frag_shader_module;
+    VK_ASSERT(vkCreateShaderModule(device, &frag_shader_module_create_info, nullptr, &frag_shader_module));
     
     while (!glfwWindowShouldClose(window)) {
 	glfwPollEvents();
