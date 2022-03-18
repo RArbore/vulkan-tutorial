@@ -12,6 +12,12 @@
 	}						\
     }
 
+extern "C" char _binary_build_shaders_vert_spv_start;
+extern "C" char _binary_build_shaders_vert_spv_end;
+
+extern "C" char _binary_build_shaders_frag_spv_start;
+extern "C" char _binary_build_shaders_frag_spv_end;
+
 const std::vector<const char*> validation_layers = {
     "VK_LAYER_KHRONOS_validation",
 };
@@ -234,6 +240,15 @@ int main() {
 	swap_chain_image_views.emplace_back();
 	VK_ASSERT(vkCreateImageView(device, &image_view_create_info, nullptr, &swap_chain_image_views.back()));
     }
+
+    std::size_t vert_size = static_cast<std::size_t>(&_binary_build_shaders_vert_spv_end - &_binary_build_shaders_vert_spv_start);
+    std::size_t frag_size = static_cast<std::size_t>(&_binary_build_shaders_frag_spv_end - &_binary_build_shaders_frag_spv_start);
+    char *vert_spv = new char[vert_size + 1];
+    char *frag_spv = new char[frag_size + 1];
+    memcpy(vert_spv, &_binary_build_shaders_vert_spv_start, vert_size);
+    memcpy(frag_spv, &_binary_build_shaders_frag_spv_start, frag_size);
+    vert_spv[vert_size] = '\0';
+    frag_spv[frag_size] = '\0';
     
     while (!glfwWindowShouldClose(window)) {
 	glfwPollEvents();
