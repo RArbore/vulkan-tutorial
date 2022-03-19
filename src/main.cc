@@ -425,11 +425,54 @@ int main() {
 
 	VK_ASSERT(vkCreateFramebuffer(device, &framebuffer_create_info, nullptr, &swap_chain_framebuffers.at(i)));
     }
+
+    VkCommandPoolCreateInfo command_pool_create_info {};
+    command_pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    command_pool_create_info.queueFamilyIndex = graphics_family_index;
+    command_pool_create_info.flags = 0;
+    
+    VkCommandPool command_pool;
+    VK_ASSERT(vkCreateCommandPool(device, &command_pool_create_info, nullptr, &command_pool));
+
+    VkCommandBufferAllocateInfo command_buffer_allocate_info {};
+    command_buffer_allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    command_buffer_allocate_info.commandPool = command_pool;
+    command_buffer_allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    command_buffer_allocate_info.commandBufferCount = static_cast<uint32_t>(swap_chain_framebuffers.size());
+    
+    std::vector<VkCommandBuffer> command_buffers(swap_chain_framebuffers.size());
+    VK_ASSERT(vkAllocateCommandBuffers(device, &command_buffer_allocate_info, command_buffers.data()));
+
+    VkClearValue clear_color = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+    for (std::size_t i = 0; i < command_buffers.size(); ++i) {
+	VkCommandBufferBeginInfo command_buffer_begin_info {};
+	command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	command_buffer_begin_info.flags = 0;
+	command_buffer_begin_info.pInheritanceInfo = nullptr;
+	VK_ASSERT(vkBeginCommandBuffer(command_buffers.at(i), &command_buffer_begin_info));
+
+	VkRenderPassBeginInfo render_pass_begin_info {};
+	render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	render_pass_begin_info.renderPass = render_pass;
+	render_pass_begin_info.framebuffer = swap_chain_framebuffers.at(i);
+	render_pass_begin_info.renderArea.offset = {0, 0};
+	render_pass_begin_info.renderArea.extent = swap_extent;
+	render_pass_begin_info.clearValueCount = 1;
+	render_pass_begin_info.pClearValues = &clear_color;
+	vkCmdBeginRenderPass(command_buffers.at(i), &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+
+	vkCmdBindPipeline(command_buffers.at(i), VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
+	vkCmdDraw(command_buffers.at(i), 3, 1, 0, 0);
+
+	vkCmdEndRenderPass(command_buffers.at(i));
+	VK_ASSERT(vkEndCommandBuffer(command_buffers.at(i)));
+    }
     
     while (!glfwWindowShouldClose(window)) {
 	glfwPollEvents();
     }
 
+    vkDestroyCommandPool(device, command_pool, nullptr);
     for (auto fb : swap_chain_framebuffers)
 	vkDestroyFramebuffer(device, fb, nullptr);
     vkDestroyPipeline(device, graphics_pipeline, nullptr);
