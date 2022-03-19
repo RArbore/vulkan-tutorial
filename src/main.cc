@@ -412,19 +412,33 @@ int main() {
     VkPipeline graphics_pipeline;
     VK_ASSERT(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &graphics_pipeline_create_info, nullptr, &graphics_pipeline));
 
-    vkDestroyShaderModule(device, vert_shader_module, nullptr);
-    vkDestroyShaderModule(device, frag_shader_module, nullptr);
+    std::vector<VkFramebuffer> swap_chain_framebuffers(swap_chain_image_views.size());
+    for (std::size_t i = 0; i < swap_chain_framebuffers.size(); ++i) {
+	VkFramebufferCreateInfo framebuffer_create_info {};
+	framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	framebuffer_create_info.renderPass = render_pass;
+	framebuffer_create_info.attachmentCount = 1;
+	framebuffer_create_info.pAttachments = &swap_chain_image_views.at(i);
+	framebuffer_create_info.width = swap_extent.width;
+	framebuffer_create_info.height = swap_extent.height;
+	framebuffer_create_info.layers = 1;
+
+	VK_ASSERT(vkCreateFramebuffer(device, &framebuffer_create_info, nullptr, &swap_chain_framebuffers.at(i)));
+    }
     
     while (!glfwWindowShouldClose(window)) {
 	glfwPollEvents();
     }
 
+    for (auto fb : swap_chain_framebuffers)
+	vkDestroyFramebuffer(device, fb, nullptr);
     vkDestroyPipeline(device, graphics_pipeline, nullptr);
     vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
     vkDestroyRenderPass(device, render_pass, nullptr);
-    for (auto swap_chain_image_view : swap_chain_image_views) {
+    vkDestroyShaderModule(device, vert_shader_module, nullptr);
+    vkDestroyShaderModule(device, frag_shader_module, nullptr);
+    for (auto swap_chain_image_view : swap_chain_image_views)
 	vkDestroyImageView(device, swap_chain_image_view, nullptr);
-    }
     vkDestroySwapchainKHR(device, swap_chain, nullptr);
     vkDestroyDevice(device, nullptr);
     vkDestroySurfaceKHR(instance, surface, nullptr);
