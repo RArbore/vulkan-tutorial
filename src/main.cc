@@ -260,12 +260,22 @@ int main() {
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &color_attachment_reference;
 
+    VkSubpassDependency dependency {};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = 0;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
     VkRenderPassCreateInfo render_pass_create_info {};
     render_pass_create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     render_pass_create_info.attachmentCount = 1;
     render_pass_create_info.pAttachments = &color_attachment;
     render_pass_create_info.subpassCount = 1;
     render_pass_create_info.pSubpasses = &subpass;
+    render_pass_create_info.dependencyCount = 1;
+    render_pass_create_info.pDependencies = &dependency;
     
     VkRenderPass render_pass;
     VK_ASSERT(vkCreateRenderPass(device, &render_pass_create_info, nullptr, &render_pass));
@@ -467,11 +477,45 @@ int main() {
 	vkCmdEndRenderPass(command_buffers.at(i));
 	VK_ASSERT(vkEndCommandBuffer(command_buffers.at(i)));
     }
+
+    VkSemaphoreCreateInfo semaphore_create_info {};
+    semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    
+    VkSemaphore image_available_semaphore, render_finished_semaphore;
+    VK_ASSERT(vkCreateSemaphore(device, &semaphore_create_info, nullptr, &image_available_semaphore));
+    VK_ASSERT(vkCreateSemaphore(device, &semaphore_create_info, nullptr, &render_finished_semaphore));
+
+    VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    VkSubmitInfo submit_info {};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.waitSemaphoreCount = 1;
+    submit_info.pWaitSemaphores = &image_available_semaphore;
+    submit_info.pWaitDstStageMask = wait_stages;
+    submit_info.commandBufferCount = 1;
+    submit_info.signalSemaphoreCount = 1;
+    submit_info.pSignalSemaphores = &render_finished_semaphore;
+
+    VkPresentInfoKHR present_info {};
+    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    present_info.waitSemaphoreCount = 1;
+    present_info.pWaitSemaphores = &render_finished_semaphore;
+    present_info.swapchainCount = 1;
+    present_info.pSwapchains = &swap_chain;
+    present_info.pResults = nullptr;
     
     while (!glfwWindowShouldClose(window)) {
 	glfwPollEvents();
+
+	uint32_t image_index;
+	vkAcquireNextImageKHR(device, swap_chain, UINT64_MAX, image_available_semaphore, VK_NULL_HANDLE, &image_index);
+	submit_info.pCommandBuffers = &command_buffers.at(image_index);
+	VK_ASSERT(vkQueueSubmit(graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
+	present_info.pImageIndices = &image_index;
+	vkQueuePresentKHR(present_queue, &present_info);
     }
 
+    vkDestroySemaphore(device, render_finished_semaphore, nullptr);
+    vkDestroySemaphore(device, image_available_semaphore, nullptr);
     vkDestroyCommandPool(device, command_pool, nullptr);
     for (auto fb : swap_chain_framebuffers)
 	vkDestroyFramebuffer(device, fb, nullptr);
