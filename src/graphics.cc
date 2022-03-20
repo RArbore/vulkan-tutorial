@@ -42,6 +42,9 @@ const std::vector<Vertex> vertices = {
     {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
     {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
     {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{0.0f+0.6f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f+0.6f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{-0.5f+0.6f, 0.5f}, {0.0f, 0.0f, 1.0f}},
 };
 
 #ifdef NDEBUG
@@ -577,28 +580,12 @@ void Graphics::create_command_pool() {
 }
 
 void Graphics::create_vertex_buffers() {
-    VkBufferCreateInfo buffer_create_info {};
-    buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_create_info.size = sizeof(vertices[0]) * vertices.size();
-    buffer_create_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    VK_ASSERT(vkCreateBuffer(device, &buffer_create_info, nullptr, &vertex_buffer));
-
-    VkMemoryRequirements mem_reqs;
-    vkGetBufferMemoryRequirements(device, vertex_buffer, &mem_reqs);
-
-    VkMemoryAllocateInfo memory_allocate_info {};
-    memory_allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    memory_allocate_info.allocationSize = mem_reqs.size;
-    memory_allocate_info.memoryTypeIndex = find_memory_type(mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-    VK_ASSERT(vkAllocateMemory(device, &memory_allocate_info, nullptr, &vertex_buffer_memory));
-    vkBindBufferMemory(device, vertex_buffer, vertex_buffer_memory, 0);
+    std::size_t size = sizeof(vertices[0]) * vertices.size();
+    create_buffer(size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, vertex_buffer, vertex_buffer_memory);
 
     void *data;
-    vkMapMemory(device, vertex_buffer_memory, 0, buffer_create_info.size, 0, &data);
-    memcpy(data, vertices.data(), static_cast<std::size_t>(buffer_create_info.size));
+    vkMapMemory(device, vertex_buffer_memory, 0, size, 0, &data);
+    memcpy(data, vertices.data(), size);
     vkUnmapMemory(device, vertex_buffer_memory);
 }
 
@@ -671,6 +658,37 @@ void Graphics::create_sync_objects() {
     present_info.pResults = nullptr;
 }
 
+void Graphics::create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &buffer_memory) {
+    VkBufferCreateInfo buffer_create_info {};
+    buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_create_info.size = size;
+    buffer_create_info.usage = usage;
+    buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VK_ASSERT(vkCreateBuffer(device, &buffer_create_info, nullptr, &buffer));
+
+    VkMemoryRequirements mem_reqs;
+    vkGetBufferMemoryRequirements(device, buffer, &mem_reqs);
+
+    VkMemoryAllocateInfo memory_allocate_info {};
+    memory_allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    memory_allocate_info.allocationSize = mem_reqs.size;
+    memory_allocate_info.memoryTypeIndex = find_memory_type(mem_reqs.memoryTypeBits, properties);
+
+    VK_ASSERT(vkAllocateMemory(device, &memory_allocate_info, nullptr, &buffer_memory));
+    vkBindBufferMemory(device, buffer, buffer_memory, 0);
+}
+
+uint32_t Graphics::find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties) {
+    VkPhysicalDeviceMemoryProperties mem_props;
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_props);
+
+    for (uint32_t i = 0; i < mem_props.memoryTypeCount; ++i) {
+	if ((type_filter & (1 << i)) && (mem_props.memoryTypes[i].propertyFlags & properties)) return i;
+    }
+    throw std::runtime_error("Failed to find memory");
+}
+
 void Graphics::recreate_swap_chain() {
     int width = 0, height = 0;
     glfwGetFramebufferSize(window, &width, &height);
@@ -700,14 +718,4 @@ void Graphics::recreate_swap_chain() {
     create_graphics_pipeline();
     create_framebuffers();
     create_command_buffers();
-}
-
-uint32_t Graphics::find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties) {
-    VkPhysicalDeviceMemoryProperties mem_props;
-    vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_props);
-
-    for (uint32_t i = 0; i < mem_props.memoryTypeCount; ++i) {
-	if ((type_filter & (1 << i)) && (mem_props.memoryTypes[i].propertyFlags & properties)) return i;
-    }
-    throw std::runtime_error("Failed to find memory");
 }
