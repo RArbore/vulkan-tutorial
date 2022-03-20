@@ -12,14 +12,18 @@ L_FLAGS=-L/usr/lib/x86_64-linux-gnu -lglfw -lvulkan -fopenmp -flto
 DEBUG=-g -Og
 RELEASE=-DNDEBUG -O3 -flto -fno-signed-zeros -fno-trapping-math -frename-registers -funroll-loops -mavx -march=native
 
-build/debug/vulkan-tutorial: build/debug/main.o build/shaders/vert.o build/shaders/frag.o
+build/debug/vulkan-tutorial: build/debug/main.o build/debug/graphics.o build/shaders/vert.o build/shaders/frag.o
 	$(LD) -o $@ $^ $(L_FLAGS)
-build/debug/main.o: src/main.cc
+build/debug/main.o: src/main.cc include/graphics.h
+	$(CXX) $(CXX_FLAGS) $(DEBUG) -c -o $@ $<
+build/debug/graphics.o: src/graphics.cc include/graphics.h
 	$(CXX) $(CXX_FLAGS) $(DEBUG) -c -o $@ $<
 
-build/release/vulkan-tutorial: build/release/main.o build/shaders/vert.o build/shaders/frag.o
+build/release/vulkan-tutorial: build/release/main.o build/release/graphics.o build/shaders/vert.o build/shaders/frag.o
 	$(LD) -o $@ $^ $(L_FLAGS)
-build/release/main.o: src/main.cc
+build/release/main.o: src/main.cc include/graphics.h
+	$(CXX) $(CXX_FLAGS) $(RELEASE) -c -o $@ $<
+build/release/graphics.o: src/graphics.cc include/graphics.h
 	$(CXX) $(CXX_FLAGS) $(RELEASE) -c -o $@ $<
 
 build/shaders/vert.o: build/shaders/vert.spv
