@@ -42,6 +42,7 @@ Graphics::~Graphics() {
 	vkDestroySemaphore(device, sm, nullptr);
     for (auto sm : image_available_semaphores)
 	vkDestroySemaphore(device, sm, nullptr);
+    vkFreeCommandBuffers(device, command_pool, static_cast<uint32_t>(command_buffers.size()), command_buffers.data());
     vkDestroyCommandPool(device, command_pool, nullptr);
     for (auto fb : swap_chain_framebuffers)
 	vkDestroyFramebuffer(device, fb, nullptr);
@@ -81,22 +82,34 @@ void Graphics::render_tick() {
     submit_info.pCommandBuffers = &command_buffers.at(image_index);
     submit_info.pWaitSemaphores = &image_available_semaphores.at(current_frame);
     submit_info.pSignalSemaphores = &render_finished_semaphores.at(current_frame);
-    VK_ASSERT(vkQueueSubmit(graphics_queue, 1, &submit_info, in_flight_fences.at(current_frame)));
+    vkQueueSubmit(graphics_queue, 1, &submit_info, in_flight_fences.at(current_frame));
     
     present_info.pImageIndices = &image_index;
     present_info.pWaitSemaphores = &render_finished_semaphores.at(current_frame);
     vkQueuePresentKHR(present_queue, &present_info);
     
     current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
+    if (frame_buffer_resized) {
+	frame_buffer_resized = false;
+	recreate_swap_chain();
+	return;
+    }
+}
+
+static void framebuffer_resize_callback(GLFWwindow *window, [[maybe_unused]] int width, [[maybe_unused]] int height) {
+    auto graphics = reinterpret_cast<Graphics*>(glfwGetWindowUserPointer(window));
+    graphics->frame_buffer_resized = true;
 }
 
 void Graphics::glfw_init() {
     glfwInit();
     
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
     window = glfwCreateWindow(WIDTH, HEIGHT, "vulkan-tutorial", nullptr, nullptr);
+    glfwSetWindowUserPointer(window, this);
+    glfwSetFramebufferSizeCallback(window, framebuffer_resize_callback);
 }
 
 void Graphics::create_instance() {
@@ -225,7 +238,16 @@ void Graphics::create_logical_device() {
 void Graphics::create_swap_chain() {
     VkSurfaceCapabilitiesKHR surface_capabilities;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &surface_capabilities);
-    swap_extent = surface_capabilities.currentExtent;
+    if (surface_capabilities.currentExtent.width != UINT32_MAX) {
+	swap_extent = surface_capabilities.currentExtent;
+    }
+    else {
+	int width, height;
+	glfwGetFramebufferSize(window, &width, &height);
+
+	swap_extent.width = static_cast<uint32_t>(width);
+	swap_extent.height = static_cast<uint32_t>(height);
+    }
 
     uint32_t format_count = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &format_count, nullptr);
@@ -574,3 +596,26 @@ void Graphics::create_sync_objects() {
     present_info.pResults = nullptr;
 }
 
+void Graphics::recreate_swap_chain() {
+    vkDeviceWaitIdle(device);
+
+    for (auto fb : swap_chain_framebuffers)
+	vkDestroyFramebuffer(device, fb, nullptr);
+    vkFreeCommandBuffers(device, command_pool, static_cast<uint32_t>(command_buffers.size()), command_buffers.data());
+    vkDestroyPipeline(device, graphics_pipeline, nullptr);
+    vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
+    vkDestroyRenderPass(device, render_pass, nullptr);
+    vkDestroyShaderModule(device, vert_shader_module, nullptr);
+    vkDestroyShaderModule(device, frag_shader_module, nullptr);
+    for (auto swap_chain_image_view : swap_chain_image_views)
+	vkDestroyImageView(device, swap_chain_image_view, nullptr);
+    swap_chain_image_views.clear();
+    vkDestroySwapchainKHR(device, swap_chain, nullptr);
+
+    create_swap_chain();
+    create_image_views();
+    create_render_pass();
+    create_graphics_pipeline();
+    create_framebuffers();
+    create_command_buffers();
+}

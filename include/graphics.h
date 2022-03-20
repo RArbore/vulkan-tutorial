@@ -25,6 +25,8 @@ public:
 
     bool should_close();
     void render_tick();
+
+    bool frame_buffer_resized = false;
 private:
     GLFWwindow *window;
     VkInstance instance;
@@ -75,4 +77,6 @@ private:
     void create_command_pool();
     void create_command_buffers();
     void create_sync_objects();
+
+    void recreate_swap_chain();
 };
