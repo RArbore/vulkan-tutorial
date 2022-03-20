@@ -606,6 +606,13 @@ void Graphics::create_sync_objects() {
 }
 
 void Graphics::recreate_swap_chain() {
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(window, &width, &height);
+    while (width == 0 || height == 0) {
+	glfwGetFramebufferSize(window, &width, &height);
+	glfwWaitEvents();
+    }
+
     vkDeviceWaitIdle(device);
 
     for (auto fb : swap_chain_framebuffers)
