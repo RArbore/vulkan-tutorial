@@ -39,12 +39,14 @@ struct Vertex {
 };
 
 const std::vector<Vertex> vertices = {
-    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-    {{0.0f+0.6f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f+0.6f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{-0.5f+0.6f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}},
+};
+
+const std::vector<uint32_t> indices = {
+    0, 1, 2, 2, 3, 0,
 };
 
 #ifdef NDEBUG
@@ -66,6 +68,7 @@ Graphics::Graphics() {
     create_framebuffers();
     create_command_pool();
     create_vertex_buffers();
+    create_index_buffers();
     create_command_buffers();
     create_sync_objects();
 }
@@ -79,6 +82,8 @@ Graphics::~Graphics() {
     for (auto sm : image_available_semaphores)
 	vkDestroySemaphore(device, sm, nullptr);
     vkFreeCommandBuffers(device, command_pool, static_cast<uint32_t>(command_buffers.size()), command_buffers.data());
+    vkDestroyBuffer(device, index_buffer, nullptr);
+    vkFreeMemory(device, index_buffer_memory, nullptr);
     vkDestroyBuffer(device, vertex_buffer, nullptr);
     vkFreeMemory(device, vertex_buffer_memory, nullptr);
     vkDestroyCommandPool(device, command_pool, nullptr);
@@ -593,6 +598,28 @@ void Graphics::create_vertex_buffers() {
     
     create_buffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertex_buffer, vertex_buffer_memory);
     copy_buffer(vertex_buffer, staging_buffer, size);
+
+    vkDestroyBuffer(device, staging_buffer, nullptr);
+    vkFreeMemory(device, staging_buffer_memory, nullptr);
+}
+
+void Graphics::create_index_buffers() {
+    std::size_t size = sizeof(indices[0]) * indices.size();
+
+    VkBuffer staging_buffer;
+    VkDeviceMemory staging_buffer_memory;
+    create_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, staging_buffer, staging_buffer_memory);
+
+    void *data;
+    vkMapMemory(device, staging_buffer_memory, 0, size, 0, &data);
+    memcpy(data, indices.data(), size);
+    vkUnmapMemory(device, staging_buffer_memory);
+    
+    create_buffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, index_buffer, index_buffer_memory);
+    copy_buffer(index_buffer, staging_buffer, size);
+
+    vkDestroyBuffer(device, staging_buffer, nullptr);
+    vkFreeMemory(device, staging_buffer_memory, nullptr);
 }
 
 void Graphics::create_command_buffers() {
@@ -626,7 +653,8 @@ void Graphics::create_command_buffers() {
 	vkCmdBindPipeline(command_buffers.at(i), VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
 	VkDeviceSize offset = 0;
 	vkCmdBindVertexBuffers(command_buffers.at(i), 0, 1, &vertex_buffer, &offset);
-	vkCmdDraw(command_buffers.at(i), static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+	vkCmdBindIndexBuffer(command_buffers.at(i), index_buffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdDrawIndexed(command_buffers.at(i), static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(command_buffers.at(i));
 	VK_ASSERT(vkEndCommandBuffer(command_buffers.at(i)));

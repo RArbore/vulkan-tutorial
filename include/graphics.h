@@ -32,38 +32,51 @@ public:
 private:
     GLFWwindow *window;
     VkInstance instance;
-    VkSurfaceKHR surface;
+
     VkPhysicalDevice physical_device;
-    uint32_t graphics_family_index, present_family_index;
     VkDevice device;
+
+    uint32_t graphics_family_index, present_family_index;
+    uint32_t queue_family_indices[2];
+
     VkQueue graphics_queue, present_queue;
+
+    VkSurfaceKHR surface;
     VkExtent2D swap_extent;
     uint32_t image_count;
-    uint32_t queue_family_indices[2];
     VkSurfaceFormatKHR surface_format;
+
     VkSwapchainKHR swap_chain;
     std::vector<VkImageView> swap_chain_image_views;
     std::vector<VkImage> swap_chain_images;
+    std::vector<VkFramebuffer> swap_chain_framebuffers;
+
     VkAttachmentDescription color_attachment {};
     VkAttachmentReference color_attachment_reference {};
     VkSubpassDescription subpass {};
     VkSubpassDependency dependency {};
     VkRenderPass render_pass;
+
     VkShaderModule vert_shader_module;
     VkShaderModule frag_shader_module;
     VkViewport viewport {};
     VkRect2D scissor {};
     VkPipelineLayout pipeline_layout;
     VkPipeline graphics_pipeline;
-    std::vector<VkFramebuffer> swap_chain_framebuffers;
+
     VkCommandPool command_pool;
+    std::vector<VkCommandBuffer> command_buffers;
+
     VkBuffer vertex_buffer;
     VkDeviceMemory vertex_buffer_memory;
-    std::vector<VkCommandBuffer> command_buffers;
+    VkBuffer index_buffer;
+    VkDeviceMemory index_buffer_memory;
+
     VkClearValue clear_color;
     VkPipelineStageFlags wait_stages[2] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     VkSubmitInfo submit_info {};
     VkPresentInfoKHR present_info {};
+
     std::vector<VkSemaphore> image_available_semaphores, render_finished_semaphores;
     std::vector<VkFence> in_flight_fences, images_in_flight;
     std::size_t current_frame = 0;
@@ -80,6 +93,7 @@ private:
     void create_framebuffers();
     void create_command_pool();
     void create_vertex_buffers();
+    void create_index_buffers();
     void create_command_buffers();
     void create_sync_objects();
 
