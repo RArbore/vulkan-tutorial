@@ -581,12 +581,18 @@ void Graphics::create_command_pool() {
 
 void Graphics::create_vertex_buffers() {
     std::size_t size = sizeof(vertices[0]) * vertices.size();
-    create_buffer(size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, vertex_buffer, vertex_buffer_memory);
+
+    VkBuffer staging_buffer;
+    VkDeviceMemory staging_buffer_memory;
+    create_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, staging_buffer, staging_buffer_memory);
 
     void *data;
-    vkMapMemory(device, vertex_buffer_memory, 0, size, 0, &data);
+    vkMapMemory(device, staging_buffer_memory, 0, size, 0, &data);
     memcpy(data, vertices.data(), size);
-    vkUnmapMemory(device, vertex_buffer_memory);
+    vkUnmapMemory(device, staging_buffer_memory);
+    
+    create_buffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertex_buffer, vertex_buffer_memory);
+    copy_buffer(vertex_buffer, staging_buffer, size);
 }
 
 void Graphics::create_command_buffers() {
@@ -677,6 +683,39 @@ void Graphics::create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemo
 
     VK_ASSERT(vkAllocateMemory(device, &memory_allocate_info, nullptr, &buffer_memory));
     vkBindBufferMemory(device, buffer, buffer_memory, 0);
+}
+
+void Graphics::copy_buffer(VkBuffer dst_buffer, VkBuffer src_buffer, VkDeviceSize size) {
+    VkCommandBufferAllocateInfo command_buffer_allocate_info {};
+    command_buffer_allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    command_buffer_allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    command_buffer_allocate_info.commandPool = command_pool;
+    command_buffer_allocate_info.commandBufferCount = 1;
+
+    VkCommandBuffer command_buffer;
+    vkAllocateCommandBuffers(device, &command_buffer_allocate_info, &command_buffer);
+
+    VkCommandBufferBeginInfo command_buffer_begin_info {};
+    command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info);
+
+    VkBufferCopy copy_region {};
+    copy_region.srcOffset = 0;
+    copy_region.dstOffset = 0;
+    copy_region.size = size;
+    vkCmdCopyBuffer(command_buffer, src_buffer, dst_buffer, 1, &copy_region);
+    vkEndCommandBuffer(command_buffer);
+
+    VkSubmitInfo copy_submit_info {};
+    copy_submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    copy_submit_info.commandBufferCount = 1;
+    copy_submit_info.pCommandBuffers = &command_buffer;
+
+    vkQueueSubmit(graphics_queue, 1, &copy_submit_info, VK_NULL_HANDLE);
+    vkQueueWaitIdle(graphics_queue);
+
+    vkFreeCommandBuffers(device, command_pool, 1, &command_buffer);
 }
 
 uint32_t Graphics::find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties) {

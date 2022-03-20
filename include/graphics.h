@@ -84,6 +84,7 @@ private:
     void create_sync_objects();
 
     void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &buffer_memory);
+    void copy_buffer(VkBuffer dst_buffer, VkBuffer src_buffer, VkDeviceSize size);
     uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
     void recreate_swap_chain();
 };
