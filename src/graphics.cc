@@ -282,17 +282,17 @@ void Graphics::create_swap_chain() {
 
 	swap_extent.width = static_cast<uint32_t>(width);
 	swap_extent.height = static_cast<uint32_t>(height);
-
-	if (swap_extent.width < surface_capabilities.minImageExtent.width || swap_extent.height < surface_capabilities.minImageExtent.height) {
-	    swap_extent.width = surface_capabilities.minImageExtent.width;
-	    swap_extent.height = surface_capabilities.minImageExtent.height;
-	}
-	if (swap_extent.width > surface_capabilities.maxImageExtent.width || swap_extent.height > surface_capabilities.maxImageExtent.height) {
-	    swap_extent.width = surface_capabilities.maxImageExtent.width;
-	    swap_extent.height = surface_capabilities.maxImageExtent.height;
-	}
     }
 
+    if (swap_extent.width < surface_capabilities.minImageExtent.width || swap_extent.height < surface_capabilities.minImageExtent.height) {
+	swap_extent.width = surface_capabilities.minImageExtent.width;
+	swap_extent.height = surface_capabilities.minImageExtent.height;
+    }
+    if (swap_extent.width > surface_capabilities.maxImageExtent.width || swap_extent.height > surface_capabilities.maxImageExtent.height) {
+	swap_extent.width = surface_capabilities.maxImageExtent.width;
+	swap_extent.height = surface_capabilities.maxImageExtent.height;
+    }
+    
     uint32_t format_count = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &format_count, nullptr);
     std::vector<VkSurfaceFormatKHR> formats(format_count);
