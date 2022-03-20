@@ -12,6 +12,38 @@ const std::vector<const char*> device_extensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 };
 
+struct Vertex {
+    glm::vec2 pos;
+    glm::vec3 color;
+
+    static VkVertexInputBindingDescription get_binding_description() {
+	VkVertexInputBindingDescription desc;
+	desc.binding = 0;
+	desc.stride = sizeof(Vertex);
+	desc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+	return desc;
+    }
+
+    static std::array<VkVertexInputAttributeDescription, 2> get_attribute_descriptions() {
+	std::array<VkVertexInputAttributeDescription, 2> descs;
+	descs[0].binding = 0;
+	descs[0].location = 0;
+	descs[0].format = VK_FORMAT_R32G32_SFLOAT;
+	descs[0].offset = offsetof(Vertex, pos);
+	descs[1].binding = 0;
+	descs[1].location = 1;
+	descs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+	descs[1].offset = offsetof(Vertex, color);
+	return descs;
+    }
+};
+
+const std::vector<Vertex> vertices = {
+    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+};
+
 #ifdef NDEBUG
 static constexpr bool enable_debug = false;
 #else
@@ -30,6 +62,7 @@ Graphics::Graphics() {
     create_graphics_pipeline();
     create_framebuffers();
     create_command_pool();
+    create_vertex_buffers();
     create_command_buffers();
     create_sync_objects();
 }
@@ -43,6 +76,8 @@ Graphics::~Graphics() {
     for (auto sm : image_available_semaphores)
 	vkDestroySemaphore(device, sm, nullptr);
     vkFreeCommandBuffers(device, command_pool, static_cast<uint32_t>(command_buffers.size()), command_buffers.data());
+    vkDestroyBuffer(device, vertex_buffer, nullptr);
+    vkFreeMemory(device, vertex_buffer_memory, nullptr);
     vkDestroyCommandPool(device, command_pool, nullptr);
     for (auto fb : swap_chain_framebuffers)
 	vkDestroyFramebuffer(device, fb, nullptr);
@@ -411,12 +446,15 @@ void Graphics::create_graphics_pipeline() {
 
     VkPipelineShaderStageCreateInfo shader_stages_create_info[] = {vert_shader_stage_create_info, frag_shader_stage_create_info};
 
+    auto binding_description = Vertex::get_binding_description();
+    auto attribute_descriptions = Vertex::get_attribute_descriptions();
+
     VkPipelineVertexInputStateCreateInfo vertex_input_create_info {};
     vertex_input_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertex_input_create_info.vertexBindingDescriptionCount = 0;
-    vertex_input_create_info.pVertexBindingDescriptions = nullptr;
-    vertex_input_create_info.vertexAttributeDescriptionCount = 0;
-    vertex_input_create_info.pVertexAttributeDescriptions = nullptr;
+    vertex_input_create_info.vertexBindingDescriptionCount = 1;
+    vertex_input_create_info.pVertexBindingDescriptions = &binding_description;
+    vertex_input_create_info.vertexAttributeDescriptionCount = static_cast<uint32_t>(attribute_descriptions.size());
+    vertex_input_create_info.pVertexAttributeDescriptions = attribute_descriptions.data();
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info {};
     input_assembly_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -538,6 +576,32 @@ void Graphics::create_command_pool() {
     VK_ASSERT(vkCreateCommandPool(device, &command_pool_create_info, nullptr, &command_pool));
 }
 
+void Graphics::create_vertex_buffers() {
+    VkBufferCreateInfo buffer_create_info {};
+    buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_create_info.size = sizeof(vertices[0]) * vertices.size();
+    buffer_create_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VK_ASSERT(vkCreateBuffer(device, &buffer_create_info, nullptr, &vertex_buffer));
+
+    VkMemoryRequirements mem_reqs;
+    vkGetBufferMemoryRequirements(device, vertex_buffer, &mem_reqs);
+
+    VkMemoryAllocateInfo memory_allocate_info {};
+    memory_allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    memory_allocate_info.allocationSize = mem_reqs.size;
+    memory_allocate_info.memoryTypeIndex = find_memory_type(mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    VK_ASSERT(vkAllocateMemory(device, &memory_allocate_info, nullptr, &vertex_buffer_memory));
+    vkBindBufferMemory(device, vertex_buffer, vertex_buffer_memory, 0);
+
+    void *data;
+    vkMapMemory(device, vertex_buffer_memory, 0, buffer_create_info.size, 0, &data);
+    memcpy(data, vertices.data(), static_cast<std::size_t>(buffer_create_info.size));
+    vkUnmapMemory(device, vertex_buffer_memory);
+}
+
 void Graphics::create_command_buffers() {
     VkCommandBufferAllocateInfo command_buffer_allocate_info {};
     command_buffer_allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -567,7 +631,9 @@ void Graphics::create_command_buffers() {
 	vkCmdBeginRenderPass(command_buffers.at(i), &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
 	vkCmdBindPipeline(command_buffers.at(i), VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
-	vkCmdDraw(command_buffers.at(i), 3, 1, 0, 0);
+	VkDeviceSize offset = 0;
+	vkCmdBindVertexBuffers(command_buffers.at(i), 0, 1, &vertex_buffer, &offset);
+	vkCmdDraw(command_buffers.at(i), static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 
 	vkCmdEndRenderPass(command_buffers.at(i));
 	VK_ASSERT(vkEndCommandBuffer(command_buffers.at(i)));
@@ -634,4 +700,14 @@ void Graphics::recreate_swap_chain() {
     create_graphics_pipeline();
     create_framebuffers();
     create_command_buffers();
+}
+
+uint32_t Graphics::find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties) {
+    VkPhysicalDeviceMemoryProperties mem_props;
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_props);
+
+    for (uint32_t i = 0; i < mem_props.memoryTypeCount; ++i) {
+	if ((type_filter & (1 << i)) && (mem_props.memoryTypes[i].propertyFlags & properties)) return i;
+    }
+    throw std::runtime_error("Failed to find memory");
 }

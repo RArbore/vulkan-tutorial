@@ -1,10 +1,12 @@
 #include <iostream>
 #include <cstring>
 #include <vector>
+#include <array>
 #include <set>
 
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 
 #define VK_ASSERT(res) {				\
 	if ((res) != VK_SUCCESS) {			\
@@ -55,6 +57,8 @@ private:
     VkPipeline graphics_pipeline;
     std::vector<VkFramebuffer> swap_chain_framebuffers;
     VkCommandPool command_pool;
+    VkBuffer vertex_buffer;
+    VkDeviceMemory vertex_buffer_memory;
     std::vector<VkCommandBuffer> command_buffers;
     VkClearValue clear_color;
     VkPipelineStageFlags wait_stages[2] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
@@ -75,8 +79,10 @@ private:
     void create_graphics_pipeline();
     void create_framebuffers();
     void create_command_pool();
+    void create_vertex_buffers();
     void create_command_buffers();
     void create_sync_objects();
 
+    uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
     void recreate_swap_chain();
 };
