@@ -8,12 +8,6 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 
-#define VK_ASSERT(res) {				\
-	if ((res) != VK_SUCCESS) {			\
-	    throw std::runtime_error("Vulkan failure");	\
-	}						\
-    }
-
 extern "C" char _binary_build_shaders_vert_spv_start;
 extern "C" char _binary_build_shaders_vert_spv_end;
 
@@ -73,7 +67,7 @@ private:
     VkDeviceMemory index_buffer_memory;
 
     VkClearValue clear_color;
-    VkPipelineStageFlags wait_stages[2] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    VkPipelineStageFlags wait_stages[1] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     VkSubmitInfo submit_info {};
     VkPresentInfoKHR present_info {};
 

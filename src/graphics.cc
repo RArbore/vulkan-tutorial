@@ -1,5 +1,12 @@
 #include "graphics.h"
 
+void VK_ASSERT(VkResult res) {
+    if ((res) != VK_SUCCESS) {
+	throw std::runtime_error("Vulkan failure " + std::to_string(static_cast<int>(res)));
+    }
+}
+
+
 static constexpr int WIDTH = 800;
 static constexpr int HEIGHT = 600;
 static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
@@ -186,10 +193,10 @@ void Graphics::create_instance() {
 		    break;
 		}
 	    }
-	    if (i >= validation_layer_count) throw std::runtime_error("Vulkan failure");
+	    if (i >= validation_layer_count) throw std::runtime_error("No validation layers");
 	}
 
-	instance_create_info.enabledLayerCount = validation_layer_count;
+	instance_create_info.enabledLayerCount = static_cast<uint32_t>(validation_layers.size());
 	instance_create_info.ppEnabledLayerNames = validation_layers.data();
     }
 
@@ -785,4 +792,5 @@ void Graphics::recreate_swap_chain() {
     create_graphics_pipeline();
     create_framebuffers();
     create_command_buffers();
+    present_info.pSwapchains = &swap_chain;
 }
