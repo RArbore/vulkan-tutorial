@@ -9,7 +9,7 @@ void VK_ASSERT(VkResult res) {
 
 static constexpr int WIDTH = 800;
 static constexpr int HEIGHT = 600;
-static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+static constexpr int MAX_FRAMES_IN_FLIGHT = 3;
 
 const std::vector<const char*> validation_layers = {
     "VK_LAYER_KHRONOS_validation",
@@ -124,9 +124,9 @@ void Graphics::render_tick() {
     uint32_t image_index;
     vkAcquireNextImageKHR(device, swap_chain, UINT64_MAX, image_available_semaphores.at(current_frame), VK_NULL_HANDLE, &image_index);
     
-    if (images_in_flight.at(current_frame) != VK_NULL_HANDLE)
-	vkWaitForFences(device, 1, &images_in_flight.at(current_frame), VK_TRUE, UINT64_MAX);
-    images_in_flight.at(current_frame) = in_flight_fences.at(current_frame);
+    if (images_in_flight.at(image_index) != VK_NULL_HANDLE)
+	vkWaitForFences(device, 1, &images_in_flight.at(image_index), VK_TRUE, UINT64_MAX);
+    images_in_flight.at(image_index) = in_flight_fences.at(current_frame);
     vkResetFences(device, 1, &in_flight_fences.at(current_frame));
     
     submit_info.pCommandBuffers = &command_buffers.at(image_index);
@@ -792,5 +792,4 @@ void Graphics::recreate_swap_chain() {
     create_graphics_pipeline();
     create_framebuffers();
     create_command_buffers();
-    present_info.pSwapchains = &swap_chain;
 }
