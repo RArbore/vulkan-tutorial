@@ -122,7 +122,14 @@ void Graphics::render_tick() {
     vkWaitForFences(device, 1, &in_flight_fences.at(current_frame), VK_TRUE, UINT64_MAX);
     
     uint32_t image_index;
-    vkAcquireNextImageKHR(device, swap_chain, UINT64_MAX, image_available_semaphores.at(current_frame), VK_NULL_HANDLE, &image_index);
+    VkResult result;
+    result = vkAcquireNextImageKHR(device, swap_chain, UINT64_MAX, image_available_semaphores.at(current_frame), VK_NULL_HANDLE, &image_index);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+	frame_buffer_resized = false;
+	recreate_swap_chain();
+	return;
+    }
+    else if (result != VK_SUBOPTIMAL_KHR) VK_ASSERT(result);
     
     if (images_in_flight.at(image_index) != VK_NULL_HANDLE)
 	vkWaitForFences(device, 1, &images_in_flight.at(image_index), VK_TRUE, UINT64_MAX);
@@ -136,7 +143,12 @@ void Graphics::render_tick() {
     
     present_info.pImageIndices = &image_index;
     present_info.pWaitSemaphores = &render_finished_semaphores.at(current_frame);
-    vkQueuePresentKHR(present_queue, &present_info);
+    result = vkQueuePresentKHR(present_queue, &present_info);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+	frame_buffer_resized = false;
+	recreate_swap_chain();
+    }
+    else VK_ASSERT(result);
     
     current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
     if (frame_buffer_resized) {
