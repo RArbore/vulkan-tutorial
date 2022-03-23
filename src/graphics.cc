@@ -104,6 +104,8 @@ Graphics::~Graphics() {
     for (auto swap_chain_image_view : swap_chain_image_views)
 	vkDestroyImageView(device, swap_chain_image_view, nullptr);
     vkDestroySwapchainKHR(device, swap_chain, nullptr);
+    vkDestroyBuffer(device, uniform_buffers, nullptr);
+    vkFreeMemory(device, uniform_buffers_memory, nullptr);
     vkDestroyDescriptorSetLayout(device, descriptor_set_layout, nullptr);
     vkDestroyDevice(device, nullptr);
     vkDestroySurfaceKHR(instance, surface, nullptr);
@@ -136,6 +138,8 @@ void Graphics::render_tick() {
 	vkWaitForFences(device, 1, &images_in_flight.at(image_index), VK_TRUE, UINT64_MAX);
     images_in_flight.at(image_index) = in_flight_fences.at(current_frame);
     vkResetFences(device, 1, &in_flight_fences.at(current_frame));
+
+    update_uniform_buffers(image_index);
     
     submit_info.pCommandBuffers = &command_buffers.at(image_index);
     submit_info.pWaitSemaphores = &image_available_semaphores.at(current_frame);
@@ -656,6 +660,12 @@ void Graphics::create_index_buffers() {
     vkFreeMemory(device, staging_buffer_memory, nullptr);
 }
 
+void Graphics::create_uniform_buffers() {
+    std::size_t size = sizeof(UniformBufferObject) * swap_chain_images.size();
+
+    create_buffer(size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniform_buffers, uniform_buffers_memory);
+}
+
 void Graphics::create_command_buffers() {
     VkCommandBufferAllocateInfo command_buffer_allocate_info {};
     command_buffer_allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -724,6 +734,22 @@ void Graphics::create_sync_objects() {
     present_info.swapchainCount = 1;
     present_info.pSwapchains = &swap_chain;
     present_info.pResults = nullptr;
+}
+
+void Graphics::update_uniform_buffers(uint32_t current_image) {
+    static auto start_time = micro_sec();
+    auto dt = static_cast<float>((micro_sec() - start_time)) / 1000000.0f;
+
+    UniformBufferObject ubo {};
+    ubo.model = glm::rotate(glm::mat4(1.0f), dt * 1.5707963268f, glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.proj = glm::perspective(0.7853981634f, static_cast<float>(swap_extent.width) / static_cast<float>(swap_extent.height), 0.01f, 1000.0f);
+    ubo.proj[1][1] *= -1;
+
+    void *data;
+    vkMapMemory(device, uniform_buffers_memory, current_image * sizeof(ubo), sizeof(ubo), 0, &data);
+    memcpy(data, &ubo, sizeof(ubo));
+    vkUnmapMemory(device, uniform_buffers_memory);
 }
 
 void Graphics::create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &buffer_memory) {
@@ -812,11 +838,14 @@ void Graphics::recreate_swap_chain() {
 	vkDestroyImageView(device, swap_chain_image_view, nullptr);
     swap_chain_image_views.clear();
     vkDestroySwapchainKHR(device, swap_chain, nullptr);
+    vkDestroyBuffer(device, uniform_buffers, nullptr);
+    vkFreeMemory(device, uniform_buffers_memory, nullptr);
 
     create_swap_chain();
     create_image_views();
     create_render_pass();
     create_graphics_pipeline();
     create_framebuffers();
+    create_uniform_buffers();
     create_command_buffers();
 }

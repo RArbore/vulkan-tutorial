@@ -4,8 +4,13 @@
 #include <array>
 #include <set>
 
+#include <chrono>
+
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
+
+#define GLM_FORCE_RADIANS
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/glm.hpp>
 
 extern "C" char _binary_build_shaders_vert_spv_start;
@@ -13,6 +18,12 @@ extern "C" char _binary_build_shaders_vert_spv_end;
 
 extern "C" char _binary_build_shaders_frag_spv_start;
 extern "C" char _binary_build_shaders_frag_spv_end;
+
+__attribute__((always_inline))
+inline unsigned long long micro_sec() {
+    return static_cast<unsigned long long>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count());
+}
+
 
 struct UniformBufferObject {
     glm::mat4 model;
@@ -72,6 +83,8 @@ private:
     VkDeviceMemory vertex_buffer_memory;
     VkBuffer index_buffer;
     VkDeviceMemory index_buffer_memory;
+    VkBuffer uniform_buffers;
+    VkDeviceMemory uniform_buffers_memory;
 
     VkClearValue clear_color;
     VkPipelineStageFlags wait_stages[1] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
@@ -96,8 +109,10 @@ private:
     void create_command_pool();
     void create_vertex_buffers();
     void create_index_buffers();
+    void create_uniform_buffers();
     void create_command_buffers();
     void create_sync_objects();
+    void update_uniform_buffers(uint32_t current_image);
 
     void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &buffer_memory);
     void copy_buffer(VkBuffer dst_buffer, VkBuffer src_buffer, VkDeviceSize size);
