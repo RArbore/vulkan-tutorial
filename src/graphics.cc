@@ -70,6 +70,7 @@ Graphics::Graphics() {
     create_swap_chain();
     create_image_views();
     create_render_pass();
+    create_descriptor_set_layout();
     create_graphics_pipeline();
     create_framebuffers();
     create_command_pool();
@@ -103,6 +104,7 @@ Graphics::~Graphics() {
     for (auto swap_chain_image_view : swap_chain_image_views)
 	vkDestroyImageView(device, swap_chain_image_view, nullptr);
     vkDestroySwapchainKHR(device, swap_chain, nullptr);
+    vkDestroyDescriptorSetLayout(device, descriptor_set_layout, nullptr);
     vkDestroyDevice(device, nullptr);
     vkDestroySurfaceKHR(instance, surface, nullptr);
     vkDestroyInstance(instance, nullptr);
@@ -436,6 +438,20 @@ void Graphics::create_render_pass() {
     VK_ASSERT(vkCreateRenderPass(device, &render_pass_create_info, nullptr, &render_pass));
 }
 
+void Graphics::create_descriptor_set_layout() {
+    VkDescriptorSetLayoutBinding ubo_layout_binding {};
+    ubo_layout_binding.binding = 0;
+    ubo_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    ubo_layout_binding.descriptorCount = 1;
+    ubo_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    ubo_layout_binding.pImmutableSamplers = nullptr;
+    VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info {};
+    descriptor_set_layout_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    descriptor_set_layout_create_info.bindingCount = 1;
+    descriptor_set_layout_create_info.pBindings = &ubo_layout_binding;
+    VK_ASSERT(vkCreateDescriptorSetLayout(device, &descriptor_set_layout_create_info, nullptr, &descriptor_set_layout));
+}
+
 void Graphics::create_graphics_pipeline() {
     std::size_t vert_size = static_cast<std::size_t>(&_binary_build_shaders_vert_spv_end - &_binary_build_shaders_vert_spv_start);
     std::size_t frag_size = static_cast<std::size_t>(&_binary_build_shaders_frag_spv_end - &_binary_build_shaders_frag_spv_start);
@@ -549,8 +565,8 @@ void Graphics::create_graphics_pipeline() {
     
     VkPipelineLayoutCreateInfo pipeline_layout_create_info {};
     pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipeline_layout_create_info.setLayoutCount = 0;
-    pipeline_layout_create_info.pSetLayouts = nullptr;
+    pipeline_layout_create_info.setLayoutCount = 1;
+    pipeline_layout_create_info.pSetLayouts = &descriptor_set_layout;
     pipeline_layout_create_info.pushConstantRangeCount = 0;
     pipeline_layout_create_info.pPushConstantRanges = nullptr;
     

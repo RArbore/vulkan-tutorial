@@ -14,6 +14,12 @@ extern "C" char _binary_build_shaders_vert_spv_end;
 extern "C" char _binary_build_shaders_frag_spv_start;
 extern "C" char _binary_build_shaders_frag_spv_end;
 
+struct UniformBufferObject {
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
+};
+
 class Graphics {
 public:
     Graphics();
@@ -55,6 +61,7 @@ private:
     VkShaderModule frag_shader_module;
     VkViewport viewport {};
     VkRect2D scissor {};
+    VkDescriptorSetLayout descriptor_set_layout;
     VkPipelineLayout pipeline_layout;
     VkPipeline graphics_pipeline;
 
@@ -83,6 +90,7 @@ private:
     void create_swap_chain();
     void create_image_views();
     void create_render_pass();
+    void create_descriptor_set_layout();
     void create_graphics_pipeline();
     void create_framebuffers();
     void create_command_pool();
