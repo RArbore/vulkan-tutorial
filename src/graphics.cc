@@ -76,36 +76,27 @@ Graphics::Graphics() {
     create_command_pool();
     create_vertex_buffers();
     create_index_buffers();
+    create_uniform_buffers();
+    create_descriptor_pool();
+    create_descriptor_sets();
     create_command_buffers();
     create_sync_objects();
 }
 
 Graphics::~Graphics() {
     vkDeviceWaitIdle(device);
+    cleanup_swap_chain();
     for (auto fn : in_flight_fences)
 	vkDestroyFence(device, fn, nullptr);
     for (auto sm : render_finished_semaphores)
 	vkDestroySemaphore(device, sm, nullptr);
     for (auto sm : image_available_semaphores)
 	vkDestroySemaphore(device, sm, nullptr);
-    vkFreeCommandBuffers(device, command_pool, static_cast<uint32_t>(command_buffers.size()), command_buffers.data());
     vkDestroyBuffer(device, index_buffer, nullptr);
     vkFreeMemory(device, index_buffer_memory, nullptr);
     vkDestroyBuffer(device, vertex_buffer, nullptr);
     vkFreeMemory(device, vertex_buffer_memory, nullptr);
     vkDestroyCommandPool(device, command_pool, nullptr);
-    for (auto fb : swap_chain_framebuffers)
-	vkDestroyFramebuffer(device, fb, nullptr);
-    vkDestroyPipeline(device, graphics_pipeline, nullptr);
-    vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
-    vkDestroyRenderPass(device, render_pass, nullptr);
-    vkDestroyShaderModule(device, vert_shader_module, nullptr);
-    vkDestroyShaderModule(device, frag_shader_module, nullptr);
-    for (auto swap_chain_image_view : swap_chain_image_views)
-	vkDestroyImageView(device, swap_chain_image_view, nullptr);
-    vkDestroySwapchainKHR(device, swap_chain, nullptr);
-    vkDestroyBuffer(device, uniform_buffers, nullptr);
-    vkFreeMemory(device, uniform_buffers_memory, nullptr);
     vkDestroyDescriptorSetLayout(device, descriptor_set_layout, nullptr);
     vkDestroyDevice(device, nullptr);
     vkDestroySurfaceKHR(instance, surface, nullptr);
@@ -531,7 +522,7 @@ void Graphics::create_graphics_pipeline() {
     rasterizer_state_create_info.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer_state_create_info.lineWidth = 1.0f;
     rasterizer_state_create_info.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer_state_create_info.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer_state_create_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer_state_create_info.depthBiasEnable = VK_FALSE;
     rasterizer_state_create_info.depthBiasConstantFactor = 0.0f;
     rasterizer_state_create_info.depthBiasClamp = 0.0f;
@@ -666,6 +657,52 @@ void Graphics::create_uniform_buffers() {
     create_buffer(size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniform_buffers, uniform_buffers_memory);
 }
 
+void Graphics::create_descriptor_pool() {
+    VkDescriptorPoolSize descriptor_pool_size {};
+    descriptor_pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptor_pool_size.descriptorCount = static_cast<uint32_t>(swap_chain_images.size());
+
+    VkDescriptorPoolCreateInfo descriptor_pool_create_info {};
+    descriptor_pool_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    descriptor_pool_create_info.poolSizeCount = 1;
+    descriptor_pool_create_info.pPoolSizes = &descriptor_pool_size;
+    descriptor_pool_create_info.maxSets = static_cast<uint32_t>(swap_chain_images.size());
+
+    VK_ASSERT(vkCreateDescriptorPool(device, &descriptor_pool_create_info, nullptr, &descriptor_pool));
+}
+
+void Graphics::create_descriptor_sets() {
+    std::vector<VkDescriptorSetLayout> descriptor_set_layouts(swap_chain_images.size(), descriptor_set_layout);
+    VkDescriptorSetAllocateInfo descriptor_set_allocate_info {};
+    descriptor_set_allocate_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    descriptor_set_allocate_info.descriptorPool = descriptor_pool;
+    descriptor_set_allocate_info.descriptorSetCount = static_cast<uint32_t>(swap_chain_images.size());
+    descriptor_set_allocate_info.pSetLayouts = descriptor_set_layouts.data();
+
+    descriptor_sets.resize(swap_chain_images.size());
+    VK_ASSERT(vkAllocateDescriptorSets(device, &descriptor_set_allocate_info, descriptor_sets.data()));
+
+    for (uint32_t i = 0; i < static_cast<uint32_t>(swap_chain_images.size()); ++i) {
+	VkDescriptorBufferInfo descriptor_buffer_info {};
+	descriptor_buffer_info.buffer = uniform_buffers;
+	descriptor_buffer_info.offset = i * sizeof(UniformBufferObject);
+	descriptor_buffer_info.range = sizeof(UniformBufferObject);
+
+	VkWriteDescriptorSet descriptor_write {};
+	descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptor_write.dstSet = descriptor_sets.at(i);
+	descriptor_write.dstBinding = 0;
+	descriptor_write.dstArrayElement = 0;
+	descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	descriptor_write.descriptorCount = 1;
+	descriptor_write.pBufferInfo = &descriptor_buffer_info;
+	descriptor_write.pImageInfo = nullptr;
+	descriptor_write.pTexelBufferView = nullptr;
+
+	vkUpdateDescriptorSets(device, 1, &descriptor_write, 0, nullptr);
+    }
+}
+
 void Graphics::create_command_buffers() {
     VkCommandBufferAllocateInfo command_buffer_allocate_info {};
     command_buffer_allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -698,6 +735,7 @@ void Graphics::create_command_buffers() {
 	VkDeviceSize offset = 0;
 	vkCmdBindVertexBuffers(command_buffers.at(i), 0, 1, &vertex_buffer, &offset);
 	vkCmdBindIndexBuffer(command_buffers.at(i), index_buffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdBindDescriptorSets(command_buffers.at(i), VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, &descriptor_sets.at(i), 0, nullptr);
 	vkCmdDrawIndexed(command_buffers.at(i), static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(command_buffers.at(i));
@@ -816,16 +854,7 @@ uint32_t Graphics::find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags 
     throw std::runtime_error("Failed to find memory");
 }
 
-void Graphics::recreate_swap_chain() {
-    int width = 0, height = 0;
-    glfwGetFramebufferSize(window, &width, &height);
-    while (width == 0 || height == 0) {
-	glfwGetFramebufferSize(window, &width, &height);
-	glfwWaitEvents();
-    }
-
-    vkDeviceWaitIdle(device);
-
+void Graphics::cleanup_swap_chain() {
     for (auto fb : swap_chain_framebuffers)
 	vkDestroyFramebuffer(device, fb, nullptr);
     vkFreeCommandBuffers(device, command_pool, static_cast<uint32_t>(command_buffers.size()), command_buffers.data());
@@ -840,6 +869,20 @@ void Graphics::recreate_swap_chain() {
     vkDestroySwapchainKHR(device, swap_chain, nullptr);
     vkDestroyBuffer(device, uniform_buffers, nullptr);
     vkFreeMemory(device, uniform_buffers_memory, nullptr);
+    vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
+}
+
+void Graphics::recreate_swap_chain() {
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(window, &width, &height);
+    while (width == 0 || height == 0) {
+	glfwGetFramebufferSize(window, &width, &height);
+	glfwWaitEvents();
+    }
+
+    vkDeviceWaitIdle(device);
+
+    cleanup_swap_chain();
 
     create_swap_chain();
     create_image_views();
@@ -847,5 +890,7 @@ void Graphics::recreate_swap_chain() {
     create_graphics_pipeline();
     create_framebuffers();
     create_uniform_buffers();
+    create_descriptor_pool();
+    create_descriptor_sets();
     create_command_buffers();
 }

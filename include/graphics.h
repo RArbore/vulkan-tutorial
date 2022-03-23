@@ -86,6 +86,9 @@ private:
     VkBuffer uniform_buffers;
     VkDeviceMemory uniform_buffers_memory;
 
+    VkDescriptorPool descriptor_pool;
+    std::vector<VkDescriptorSet> descriptor_sets;
+
     VkClearValue clear_color;
     VkPipelineStageFlags wait_stages[1] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     VkSubmitInfo submit_info {};
@@ -110,6 +113,8 @@ private:
     void create_vertex_buffers();
     void create_index_buffers();
     void create_uniform_buffers();
+    void create_descriptor_pool();
+    void create_descriptor_sets();
     void create_command_buffers();
     void create_sync_objects();
     void update_uniform_buffers(uint32_t current_image);
@@ -117,5 +122,6 @@ private:
     void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &buffer_memory);
     void copy_buffer(VkBuffer dst_buffer, VkBuffer src_buffer, VkDeviceSize size);
     uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
+    void cleanup_swap_chain();
     void recreate_swap_chain();
 };
