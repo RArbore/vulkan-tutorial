@@ -6,7 +6,6 @@ void VK_ASSERT(VkResult res) {
     }
 }
 
-
 static constexpr int WIDTH = 800;
 static constexpr int HEIGHT = 600;
 static constexpr int MAX_FRAMES_IN_FLIGHT = 3;
@@ -338,7 +337,7 @@ void Graphics::create_swap_chain() {
     vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &present_mode_count, present_modes.data());
     VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
     for (const auto& available_present_mode : present_modes) {
-	if (available_present_mode == VK_PRESENT_MODE_MAILBOX_KHR) {
+	if (available_present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
 	    present_mode = available_present_mode;
 	    break;
 	}
